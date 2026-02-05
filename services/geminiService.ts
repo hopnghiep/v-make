@@ -3,8 +3,21 @@ import { GoogleGenAI, VideoGenerationReferenceType } from "@google/genai";
 import { ImageData, VideoConfig } from "../types";
 
 export class VideoService {
+  private static getApiKey(): string {
+    const key = process.env.API_KEY;
+    if (!key || key === "undefined") {
+      console.error("API_KEY is missing. Ensure it is set in your environment or GitHub Secrets.");
+      return "";
+    }
+    return key;
+  }
+
   private static async getAI() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      throw new Error("Thiếu API Key. Vui lòng cấu hình API_KEY trong GitHub Secrets hoặc môi trường deploy.");
+    }
+    return new GoogleGenAI({ apiKey });
   }
 
   private static async analyzeAudio(audio: { base64: string, mimeType: string }): Promise<string> {
@@ -26,7 +39,6 @@ export class VideoService {
 
   static async enhancePrompt(prompt: string, images: ImageData[]): Promise<string> {
     const ai = await this.getAI();
-    // AI có thể xử lý tất cả 5 ảnh để hiểu bối cảnh tốt nhất
     const parts: any[] = [{ text: `Act as a cinematic director. Enhance the following video generation prompt to be more descriptive, detailed, and visually stunning for an AI video model (Veo). Keep the core intent but add details about lighting, camera movement, and atmosphere. Original prompt: "${prompt}"` }];
     
     if (images.length > 0) {
@@ -68,7 +80,6 @@ export class VideoService {
       audioDescription = await this.analyzeAudio(config.audioRef);
     }
 
-    // Ánh xạ tỷ lệ khung hình về 16:9 hoặc 9:16 cho API Veo
     const apiAspectRatio: '16:9' | '9:16' = config.aspectRatio === '9:16' || config.aspectRatio === '3:4' ? '9:16' : '16:9';
     
     let finalPrompt = `${config.prompt}. `;
@@ -85,8 +96,6 @@ export class VideoService {
     try {
       onProgress("Khởi tạo tiến trình tạo video gốc (Bước 1/2)...");
       
-      // API Veo hỗ trợ tối đa 3 referenceImages. 
-      // Chúng ta sẽ lấy 3 ảnh đầu tiên để làm tham chiếu kỹ thuật (ASSET).
       const referenceImagesPayload = images.slice(0, 3).map(img => ({
         image: { imageBytes: img.base64, mimeType: img.mimeType },
         referenceType: VideoGenerationReferenceType.ASSET,
@@ -109,7 +118,6 @@ export class VideoService {
         operation = await ai.operations.getVideosOperation({ operation: operation });
       }
 
-      // Nếu người dùng yêu cầu > 5 giây, thực hiện Extension (Bước 2)
       if (config.duration > 5) {
         const remainingSeconds = config.duration - 5;
         onProgress(`Đang mở rộng video thêm ${remainingSeconds}s (Bước 2/2)...`);
@@ -137,7 +145,7 @@ export class VideoService {
       if (!downloadLink) throw new Error("Không tìm thấy kết quả từ AI.");
 
       onProgress("Hoàn tất! Đang chuẩn bị tệp video dài...");
-      const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      const response = await fetch(`${downloadLink}&key=${this.getApiKey()}`);
       const blob = await response.blob();
       return URL.createObjectURL(blob);
     } catch (error: any) {
@@ -147,10 +155,12 @@ export class VideoService {
   }
 
   static async hasKey(): Promise<boolean> {
-    return await (window as any).aistudio.hasSelectedApiKey();
+    // Luôn kiểm tra qua API của studio nếu có, hoặc kiểm tra biến môi trường
+    const hasStudioKey = await (window as any).aistudio?.hasSelectedApiKey();
+    return hasStudioKey || !!this.getApiKey();
   }
 
   static async openKeySelector(): Promise<void> {
-    await (window as any).aistudio.openSelectKey();
+    await (window as any).aistudio?.openSelectKey();
   }
 }
