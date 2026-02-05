@@ -1,0 +1,7 @@
+{
+  "name": "V-Maker: AI Photo-to-Video",
+  "description": "Biến ảnh của bạn thành video nghệ thuật với âm nhạc và hiệu ứng sống động sử dụng công nghệ Google Veo mới nhất.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
